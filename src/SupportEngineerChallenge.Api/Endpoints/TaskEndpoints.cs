@@ -13,14 +13,19 @@ public static class TaskEndpoints
 
         group.MapGet("", async (string userId, int? limit, AppDbContext db, ILogger<Program> logger) =>
         {
-            var sw = Stopwatch.StartNew();
-            var all = await db.Tasks.AsNoTracking().ToListAsync();
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Results.BadRequest("userId is required");
+            }
 
-            var filtered = all
+            var sw = Stopwatch.StartNew();
+
+            var filtered = await db.Tasks
+                .AsNoTracking()
                 .Where(t => t.UserId == userId)
                 .OrderByDescending(t => t.CreatedAt)
                 .Take(Math.Clamp(limit ?? 50, 1, 200))
-                .ToList();
+                .ToListAsync();
 
             sw.Stop();
             logger.LogInformation(
@@ -45,8 +50,10 @@ public static class TaskEndpoints
                 createdAt = DateTime.UtcNow;
             }
 
-            if (string.IsNullOrWhiteSpace(req.UserId) || string.IsNullOrWhiteSpace(req.Title))
+            if (req is null || string.IsNullOrWhiteSpace(req.UserId) || string.IsNullOrWhiteSpace(req.Title))
+            {
                 return Results.BadRequest(new { message = "userId and title are required" });
+            }
 
             var task = new TaskItem
             {
