@@ -5,6 +5,7 @@
 ## Service overview
 - **Service:** SupportEngineerChallenge.Api
 - **Purpose:** Minimal task tracker (create + list tasks)
+- **Tech Stack**: .NET 8, EF Core, SQLite
 - **Data store:** SQLite (`app.db` in the API working directory)
 
 ## Common commands
@@ -24,34 +25,40 @@ dotnet test
 - `GET /api/tasks?userId={id}&limit={n}`
 - `POST /api/tasks`
 
-## Using log artifacts
+## Known Issues & Fixes
+1. Create Task Fails with 500 (Timestamp Parsing) Symptoms: 500 error, FormatException in logs
+Root Cause: DateTime.Parse used on missing header
+Fix: Use DateTime.TryParse with fallback to UtcNow
+Verification: POST without header succeeds and Invalid timestamp handled gracefully
 
-- **Create-task 500:** Inspect `artifacts/sample_api_log.txt` (or production logs). Look for the `CreateTask request` line — `X-Client-Timestamp present=False` or `length=0` indicates missing/invalid header. The stack trace shows `FormatException` at `DateTime.Parse`.
-- **Slow list:** Look for `ListTasks completed` lines with high `elapsedMs` (e.g. `artifacts/sample_slow_list_log.txt`). Correlate `userId` and `limit` with slow requests.
+2. Test Project Fails to Build Symptoms: FluentAssertions missing error
+Fix: Add FluentAssertions package
+Verification: dotnet test passes
 
-## Troubleshooting checklist (starter)
+3. Slow Task Listing
+Root Cause: In-memory filtering
+Fix:Use EF query with Where + Take + ToListAsync
+Verification: Reduced latency
 
-### “Create task fails with 500”
-- Check API logs in console.
-- Verify request payload and headers.
-- Look for unhandled exceptions in `POST /api/tasks`.
+4. Invalid Request Payload
+Fix:Add null + whitespace validation
 
-### “Tasks list is slow”
-- Confirm dataset size (seed can be large).
-- Inspect how the list endpoint fetches and filters data.
-- Review query patterns and database usage.
+Troubleshooting
+Create task fails: Check logs for timestamp errors
+Tasks slow: Check query and logs
+Tests failing: Run restore and test again
 
-### “Duplicates / wrong order after refresh”
-- Compare API response vs UI rendering.
-- Check the UI state update logic during refresh.
-- Verify how the list is merged and ordered.
+Verification Checklist
+- POST works without timestamp
+- No crashes on invalid input
+- GET filters correctly
+- Tests pass
 
-## Verification steps (starter)
-- Create tasks from UI and via Swagger.
-- Refresh tasks repeatedly; confirm no duplicates and ordering is correct.
-- Validate list endpoint returns only requested user's tasks.
-
-## Rollback / mitigation ideas (starter)
+Rollback
 - Roll back to last known good version.
-- Temporarily disable problematic client behavior (feature flag / UI change).
 - Add guardrails (e.g. input validation, error handling) to prevent unhandled exceptions.
+
+Operational Recommendations
+- Add structured logging
+- Monitor latency and errors
+- Add Swagger documentation
